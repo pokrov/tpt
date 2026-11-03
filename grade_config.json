@@ -1,0 +1,176 @@
+{
+  "Pre-K-K": {
+    "page_count": {
+      "min": 8,
+      "max": 10
+    },
+    "words_per_page": {
+      "min": 8,
+      "max": 22
+    },
+    "vocabulary_notes": "Use familiar concrete words, gentle repetition, simple action verbs, and at most one clearly explained new word.",
+    "sentence_complexity_notes": "Use one or two short sentences per page, mostly subject-verb-object patterns, with a predictable refrain where natural.",
+    "text_placement_style": "bottom_band",
+    "illustration_style": "Original preschool editorial illustration: large simple friendly forms, clean bold outlines, coral, sunflower and teal accents, cheerful flat color, minimal background clutter. No glossy 3D rendering. Meaningful objects fill the composition.",
+    "activity_pages": 8,
+    "items_per_page": 3,
+    "student_font_pt": 15,
+    "color_level": 3,
+    "accent": "#007F82",
+    "secondary": "#F4B942",
+    "wash": "#E3F5EF",
+    "max_operand": 10,
+    "max_result": 10,
+    "operations": [
+      "+",
+      "-"
+    ],
+    "allowed_types": [
+      "count",
+      "matching",
+      "sort",
+      "draw",
+      "trace",
+      "picture_choice"
+    ],
+    "skill_notes": "Emergent learners: adult-read directions, familiar words, count within 10, simple shape/word matching, first-letter recognition, large drawing and tracing spaces. No independent reading passages.",
+    "visual_area_mm2": 10500,
+    "minimum_text_pt": 14,
+    "purposeful_activity_layout": true
+  },
+  "1st-2nd": {
+    "page_count": {
+      "min": 10,
+      "max": 12
+    },
+    "words_per_page": {
+      "min": 18,
+      "max": 40
+    },
+    "vocabulary_notes": "Use decodable high-frequency language plus a few context-supported descriptive words; make meaning inferable from the scene.",
+    "sentence_complexity_notes": "Use mostly simple sentences with occasional conjunctions, varied openings, dialogue tags, and a clear chronological sequence.",
+    "text_placement_style": "top_band",
+    "illustration_style": "Premium early-elementary activity-book art: expressive hand-drawn shapes, crisp outlines, warm vibrant flat colors and restrained paper texture, clear large subjects and purposeful scenes. No glossy 3D mascot thumbnails or busy backgrounds.",
+    "activity_pages": 8,
+    "items_per_page": 4,
+    "student_font_pt": 14,
+    "color_level": 2,
+    "accent": "#2468B4",
+    "secondary": "#F18A55",
+    "wash": "#EAF3FC",
+    "max_operand": 50,
+    "max_result": 100,
+    "operations": [
+      "+",
+      "-"
+    ],
+    "allowed_types": [
+      "count",
+      "arithmetic",
+      "matching",
+      "sort",
+      "reading",
+      "draw",
+      "trace",
+      "picture_choice"
+    ],
+    "skill_notes": "Foundational literacy, short concrete passages, addition/subtraction within 100, classification, sentence writing. Avoid content requiring advanced decoding.",
+    "visual_area_mm2": 10000,
+    "minimum_text_pt": 13,
+    "purposeful_activity_layout": true
+  },
+  "3rd-4th": {
+    "page_count": {
+      "min": 12,
+      "max": 12
+    },
+    "words_per_page": {
+      "min": 38,
+      "max": 70
+    },
+    "vocabulary_notes": "Use vivid grade-appropriate vocabulary, meaningful context clues, sensory detail, and domain words when the lesson calls for them.",
+    "sentence_complexity_notes": "Mix simple, compound, and accessible complex sentences; use dialogue and interior thought while keeping paragraphs compact.",
+    "text_placement_style": "balanced_panel",
+    "illustration_style": "Polished illustrated learning journal: clear purposeful diagrams and visual narratives, bold controlled color, detailed but readable scenes, energetic editorial composition. Age-respectful, no babyish mascot repetition.",
+    "activity_pages": 10,
+    "items_per_page": 4,
+    "student_font_pt": 12,
+    "color_level": 1,
+    "accent": "#3D7587",
+    "secondary": "#C87724",
+    "wash": "#EAF4F7",
+    "max_operand": 100,
+    "max_result": 1000,
+    "operations": [
+      "+",
+      "-",
+      "*",
+      "/"
+    ],
+    "allowed_types": [
+      "arithmetic",
+      "matching",
+      "sort",
+      "reading",
+      "draw",
+      "picture_choice"
+    ],
+    "skill_notes": "Multi-step thinking, multiplication facts and exact division, evidence from short informational passages, word relationships, explain choices. Do not use babyish counting tasks.",
+    "visual_area_mm2": 8000,
+    "minimum_text_pt": 12,
+    "purposeful_activity_layout": true,
+    "reading_words": {
+      "min": 220,
+      "max": 280
+    },
+    "reading_guidance": "Write for ages 8-10: concrete explanations and relatable examples, mostly short sentences, clear transitions, and a few essential terms defined naturally. Require text-supported inference without adult academic jargon.",
+    "alternate_wash": "#FFF2DF"
+  },
+  "5th-6th": {
+    "page_count": {
+      "min": 12,
+      "max": 12
+    },
+    "words_per_page": {
+      "min": 65,
+      "max": 105
+    },
+    "vocabulary_notes": "Use precise, nuanced vocabulary, figurative language in moderation, subject-specific terms with natural context, and no condescending baby talk.",
+    "sentence_complexity_notes": "Use varied sentence lengths, controlled complex syntax, subtext in dialogue, stronger transitions, and age-appropriate reflection.",
+    "text_placement_style": "side_panel",
+    "illustration_style": "Sophisticated upper-elementary editorial illustration: precise contours, restrained rich palette, useful contextual scenes, clean information hierarchy and mature proportions. No babyish clip art.",
+    "activity_pages": 10,
+    "items_per_page": 4,
+    "student_font_pt": 11,
+    "color_level": 0,
+    "accent": "#334A66",
+    "secondary": "#A57736",
+    "wash": "#EDF2F8",
+    "max_operand": 1000,
+    "max_result": 10000,
+    "operations": [
+      "+",
+      "-",
+      "*",
+      "/"
+    ],
+    "allowed_types": [
+      "arithmetic",
+      "matching",
+      "sort",
+      "reading",
+      "draw",
+      "picture_choice"
+    ],
+    "skill_notes": "Upper-elementary reasoning: authentic planning constraints, multi-digit arithmetic, precise vocabulary, inference and evidence, compare solutions, justify design decisions. No infantile clip art or tracing.",
+    "visual_area_mm2": 6000,
+    "minimum_text_pt": 11,
+    "purposeful_activity_layout": true,
+    "reading_words": {
+      "min": 320,
+      "max": 380
+    },
+    "reading_guidance": "Write for ages 10-12: explain meaningful real-world ideas with concrete examples, varied readable sentences, and essential vocabulary defined in context. Challenge reasoning through inference, comparison and text structure rather than dense academic language.",
+    "alternate_wash": "#FAF3E8"
+  }
+}

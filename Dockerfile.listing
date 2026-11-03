@@ -1,0 +1,11 @@
+FROM python:3.11-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 LISTING_BIND=0.0.0.0
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
+COPY requirements-listing.txt .
+RUN pip install -r requirements-listing.txt
+COPY listing_tool ./listing_tool
+COPY listing_server.py .
+EXPOSE 8081
+CMD ["python", "listing_server.py"]

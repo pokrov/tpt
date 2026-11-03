@@ -1,0 +1,5 @@
+# Standalone offline tool only; no AI SDKs or API services.
+Flask==3.1.2
+pypdf>=6.0,<7
+reportlab>=4.4,<5
+pypdfium2>=4.30,<6

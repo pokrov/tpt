@@ -1,0 +1,211 @@
+"""Generate page illustrations with Cloudflare or explicitly selected OpenAI."""
+from __future__ import annotations
+
+import base64
+import io
+import logging
+import os
+import random
+import time
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
+
+import requests
+from PIL import Image
+from core.providers import ProviderError, get_provider_pool, image_provider_name, safe_api_error
+from core.credential_pool import Credential, retry_after_seconds
+from core.runtime import int_setting, ordered_parallel
+
+STYLE_LOCK = (
+    "Children's book illustration. Consistent warm teal, coral, golden yellow palette; "
+    "soft matte rendering, clean outlines, gentle daylight. Same character proportions "
+    "and clothing throughout. Center important action for portrait A4 cropping; keep "
+    "faces away from edges. No text, letters, logos, signatures or watermarks."
+)
+
+
+def text_free_scene(scene: str) -> str:
+    """Remove explicit quoted prop-lettering requests, preserving the surrounding scene."""
+    import re
+    props=r'(?:sign|poster|banner|placard|badge|shirt|book cover|screen)'
+    # Meta phrases can be painted as literal lettering (seen in published art).
+    scene=re.sub(r'\btext[ -]free(?:\s+(?:artwork|art|illustration))?\s*[:;,-]?','',scene,flags=re.I)
+    value=re.sub(r'\b('+props+r')\s+(?:that\s+)?(?:says|reads|saying|reading|labeled|labelled|with the words)\s*'
+        r'[\x27\"‘“][^\x27\"’”]+[\x27\"’”]',lambda m:'blank '+m[1],scene,flags=re.I)
+    value=re.sub(r'\b('+props+r')\s+(?:that\s+)?(?:says|reads|saying|reading|labeled|labelled|with the words)\s+[^.;!?\n]{1,120}',
+        lambda m:'blank '+m[1],value,flags=re.I)
+    value=re.sub(r'\bposters?\b','plain solid-color paper',value,flags=re.I)
+    # Text-bearing classroom props otherwise encourage the image model to
+    # invent writing even when no literal lettering was requested.
+    return re.sub(r'\b(?:bulletin board|whiteboard|chalkboard)s?\b','unlettered picture board',value,flags=re.I)
+
+
+def _image_prompt(story: dict, page: dict, style: str, limit: int = 2048) -> str:
+    """Fit provider limits while keeping activity assets free of unrelated cast leakage."""
+    description = story["character_description"]
+    lock = STYLE_LOCK
+    if story.get('resource_type') == 'activity_pack':
+        import re
+        scene=text_free_scene(page['image_prompt']).strip(' .\n')
+        art_style=text_free_scene(style).strip(' .\n')
+        # Put visual content first. Uppercase workflow headings and phrases such
+        # as TEXT-FREE ARTWORK have appeared literally in Flux output.
+        quality=('A single cohesive educational illustration with a clear focal subject, '
+                 'clean shapes and consistent lighting. '
+                 'Fill the illustration frame while keeping important subjects fully visible. '
+                 'Only illustrate the described scene; do not add unrelated characters or mascots. '
+                 'Paper, book covers, signs, screens and clothing have plain unmarked surfaces. '
+                 'No lettering, words, numerals, slogans, logos, signatures, watermarks, charts or page borders.')
+        people=bool(re.search(r'\b(?:children|students|pupils|classmates|boys|girls|teachers?|people|families)\b',scene,re.I))
+        if people:quality+=' Use natural faces and relaxed hands for the requested people.'
+        if people and story.get('grade_band') in {'3rd-4th','5th-6th'}:
+            quality+=' Use older elementary-school proportions rather than toddler proportions.'
+        event=' '.join(str(story.get(k,'')) for k in ('title','theme','event_name')).casefold()
+        if people and 'red ribbon' in event:
+            scene+='; the requested people wear small plain red fabric awareness ribbons on their clothing'
+        required=scene+'. '+quality+' '
+        available=limit-len(required)
+        if available<0:raise ValueError('Scene requirements exceed the image prompt limit')
+        return required+art_style[:available]
+    prefix = f"CHARACTER: {description}\nSTYLE: {style}\n{lock}\nSCENE: "
+    scene = page["image_prompt"].replace(description, "").strip(" .\n")
+    available = limit - len(prefix)
+    if available < 100:
+        raise ValueError("Character and style descriptions are too long for the image provider")
+    return prefix + scene[:available]
+
+
+def _sanitize_cloudflare_prompt(prompt: str, limit: int = 1800) -> str:
+    """Normalize prompts that Workers AI may reject as malformed or oversized."""
+    value = ' '.join(str(prompt).replace('\x00', ' ').split())
+    # Strip control characters while preserving ordinary Unicode text.
+    value = ''.join(ch for ch in value if ch == '\n' or ord(ch) >= 32)
+    return value[:limit].strip()
+
+
+def _cloudflare_image(prompt: str) -> bytes:
+    """Repeat the identical image request on the next available credential slot."""
+    return get_provider_pool("cloudflare").run(lambda credential: _cloudflare_request(prompt, credential))
+
+
+def _cloudflare_request(prompt: str, credential: Credential) -> bytes:
+    """Request FLUX through the REST API and decode its JSON base64 result."""
+    account = credential.account_id
+    url = f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/@cf/black-forest-labs/flux-1-schnell"
+    try:
+        response = requests.post(
+            url,
+            headers={"Authorization": f"Bearer {credential.api_key}"},
+            json={"prompt": prompt, "steps": int(os.getenv("CLOUDFLARE_IMAGE_STEPS", "4"))},
+            timeout=(10, int_setting('IMAGE_REQUEST_TIMEOUT_SECONDS', 60, 15, 180)),
+        )
+    except requests.RequestException:
+        raise ProviderError("Cloudflare: network request failed.", True) from None
+    if response.status_code != 200:
+        status = response.status_code
+        delay = retry_after_seconds(response.headers)
+        if status == 429:
+            try:
+                payload = response.json()
+            except ValueError:
+                payload = {}
+            errors = payload.get("errors", []) if isinstance(payload, dict) else []
+            if isinstance(errors, list) and any(isinstance(error, dict) and str(error.get("code")) == "3036" for error in errors):
+                # Workers AI's daily neuron allocation resets at midnight UTC.
+                now = datetime.now(timezone.utc)
+                reset = datetime.combine(now.date() + timedelta(days=1), datetime.min.time(), timezone.utc)
+                delay = max(delay or 0, (reset - now).total_seconds())
+        if status == 400:
+            raise ProviderError("Cloudflare: HTTP 400; image request rejected.", False, status_code=400)
+        hint = "quota/rate limit reached" if status == 429 else "check API token, permissions and account ID"
+        raise ProviderError(f"Cloudflare: HTTP {status}; {hint}.", status >= 500 or status == 408,
+                            status_code=status, rotate=status in {401, 403, 429}, retry_after=delay)
+    try:
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("Expected an object")
+        if payload.get("success") is not True:
+            raise ProviderError("Cloudflare rejected the image request; check Workers AI dashboard.")
+        return base64.b64decode(payload["result"]["image"], validate=True)
+    except (ValueError, KeyError, TypeError):
+        raise ProviderError("Cloudflare returned an invalid image response.", True) from None
+
+
+def _openai_image(client: Any, prompt: str) -> bytes:
+    """Retain the opt-in OpenAI image backend without automatic paid fallback."""
+    result = client.images.generate(
+        model=os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-1"), prompt=prompt,
+        size="1024x1536", quality=os.getenv("OPENAI_IMAGE_QUALITY", "medium"), n=1,
+    ).data[0]
+    if result.b64_json:
+        return base64.b64decode(result.b64_json, validate=True)
+    if result.url:
+        response = requests.get(result.url, timeout=(15, 120))
+        response.raise_for_status()
+        return response.content
+    raise ProviderError("OpenAI returned no image.", True)
+
+
+def _save_png(data: bytes, destination: Path) -> None:
+    """Decode actual image bytes and normalize JPEG/PNG output to a valid PNG."""
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image.load()
+            if min(image.size) < 256:
+                raise ValueError("Image is too small")
+            image.convert("RGB").save(destination, "PNG")
+    except (OSError, ValueError):
+        raise ProviderError("Provider returned corrupt or undersized image data.", True) from None
+
+
+def generate_images(story: dict[str, Any], grade_band_config: dict[str, Any],
+                    temp_dir: str | Path, *, client: Any = None,
+                    max_retries: int = 2) -> list[Path]:
+    """Generate each page with bounded retries, preserving one provider per book."""
+    if max_retries < 1:
+        raise ValueError("max_retries must be positive")
+    provider = "openai" if client is not None else image_provider_name()
+    api = client
+    if provider == "openai" and api is None:
+        from openai import OpenAI
+        api = OpenAI(api_key=os.environ["OPENAI_API_KEY"], timeout=180, max_retries=0)
+    destination_dir = Path(temp_dir)
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    def generate_page(page):
+        """Generate one distinct asset without mutating shared page ordering."""
+        prompt = _image_prompt(story, page, grade_band_config["illustration_style"])
+        destination = destination_dir / f"page_{int(page['page_number']):02d}.png"
+        sanitized_retry_used = False
+        for attempt in range(max_retries):
+            try:
+                data = _cloudflare_image(prompt) if provider == "cloudflare" else _openai_image(api, prompt)
+                _save_png(data, destination)
+                logging.getLogger(__name__).info("Illustration %s: %s", page['page_number'], provider)
+                return destination
+            except Exception as exc:
+                destination.unlink(missing_ok=True)
+                error = safe_api_error(provider, exc)
+                if (provider == "cloudflare" and error.status_code == 400
+                        and not sanitized_retry_used and attempt < max_retries - 1):
+                    sanitized = _sanitize_cloudflare_prompt(prompt)
+                    if sanitized and sanitized != prompt:
+                        prompt = sanitized
+                        sanitized_retry_used = True
+                        logging.getLogger(__name__).warning(
+                            "Illustration %s: Cloudflare rejected prompt; retrying sanitized request",
+                            page['page_number'])
+                        continue
+                if not error.retryable or attempt == max_retries - 1:
+                    raise ImageGenerationError(f"Page {page['page_number']}: {error}") from None
+                time.sleep(min(2 ** attempt + random.random(), 30))
+    try:
+        return ordered_parallel(generate_page, story['pages'],
+                                1 if client is not None else int_setting('IMAGE_WORKERS', 3, 1, 4))
+    finally:
+        if api is not None and client is None:
+            api.close()
+
+
+class ImageGenerationError(RuntimeError):
+    """An illustration could not be generated after bounded retries."""

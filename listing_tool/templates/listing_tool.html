@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Offline PDF Listing Studio</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f6f3eb;color:#20352f;font:16px/1.55 system-ui,sans-serif}main{max-width:1050px;margin:auto;padding:36px 24px}h1{font-size:38px;line-height:1.15;margin:12px 0}h2{font-size:23px}section{background:white;padding:26px;border:1px solid #deded2;border-radius:18px;margin:24px 0}.eyebrow{font-size:12px;font-weight:700;letter-spacing:2px;color:#386251}.hint{color:#53665e;font-size:14px}.error{background:#fff0eb;border:1px solid #c77d63;padding:16px;border-radius:12px}label{display:block;font-weight:650;margin:18px 0 6px}input,select,textarea{font:inherit;padding:12px;width:100%;border:1px solid #b9c9c0;border-radius:9px;background:white;color:#20352f}textarea{resize:vertical}button,.button{display:inline-block;background:#285c48;color:white;padding:12px 18px;border:0;border-radius:9px;font:inherit;font-weight:650;text-decoration:none;margin:16px 8px 0 0;cursor:pointer}a{color:#285c48}.row{display:grid;grid-template-columns:2fr 1fr;gap:22px}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:10px;border-bottom:1px solid #e3e8e2;overflow-wrap:anywhere}th{background:#f2f6f2}.table{overflow:auto}footer{font-size:13px;color:#53665e;margin:24px 0}@media(max-width:600px){main{padding:24px 14px}h1{font-size:30px}section{padding:18px}.row{grid-template-columns:1fr}}
+</style></head><body><main>
+<p class="eyebrow">OUR CLASSROOM COLLECTION</p>
+<h1>Offline PDF Listing Studio</h1>
+<p>Upload your workbook. Create a three-page student preview and a product listing draft.</p>
+<p class="hint">Runs locally with Python. No cloud AI, provider API keys, or internet requests. Titles and descriptions use extracted text and templates; review them before publishing.</p>
+<nav><a href="{{ url_for('offline_listing.index') }}">Start another upload</a> · <a href="/">Home</a></nav>
+{% if library_enabled %}<p><a href="{{ url_for('offline_listing.library') }}">Choose a saved book from the library</a></p>{% endif %}
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if library is not none %}
+<section><h2>Saved workbook library</h2><p>Choose a book to create its three-page preview, title and description. Saved product information is used when it matches the PDF; older books use PDF extraction and offline OCR.</p>
+{% for item in library %}<p><strong>{{ item.filename }}</strong><br><span class="hint">{{ 'Product information file available' if item.has_info else 'PDF extraction / offline OCR available' }}</span><br><a class="button" href="{{ url_for('offline_listing.from_library',filename=item.filename) }}">Create preview &amp; listing</a></p>{% else %}<p>No saved PDFs were found. You can still upload a book.</p>{% endfor %}</section>
+{% elif selected_file %}
+<section><h2>Create this book’s preview &amp; listing</h2><p>{{ selected_file }}</p><p>Generate a preview with exactly three student pages, plus an editable title and description. Your saved book stays unchanged.</p>
+<form method="post" action="{{ url_for('offline_listing.from_library',filename=selected_file) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button>Create preview, title &amp; description</button></form></section>
+{% elif not book %}
+<section><h2>1. Insert a book PDF</h2>
+<form method="post" action="{{ url_for('offline_listing.upload') }}" enctype="multipart/form-data">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label for="pdf">Book PDF</label><input id="pdf" name="pdf" type="file" accept="application/pdf,.pdf" required>
+<p class="hint">Text PDFs and scanned PDFs are supported. Offline English OCR runs automatically where needed and may take up to four minutes. Up to 80 MB and 100 pages. Password-protected PDFs are not supported.</p>
+<button>Read PDF</button></form></section>
+{% else %}
+<section><h2>1. Review the book</h2><p>{{ book.total }} pages in the full PDF. Page numbers below are the physical PDF page numbers.</p>
+{% if book.metadata_source == 'agent' %}<p class="hint">Using the agent’s saved product information, matched to this PDF. Page structure and question counts come from the final workbook data; no OCR was needed.</p>{% endif %}
+{% if book.metadata_note %}<p class="hint">{{ book.metadata_note }}</p>{% endif %}
+{% if book.ocr_pages %}<p class="hint">Offline OCR read pages {{ book.ocr_pages|join(', ') }}. Check the recognized topic, grade, page roles and question counts against the PDF. Scan recognition can make mistakes.</p>{% endif %}
+<form method="post" action="{{ url_for('offline_listing.review', job=job) }}">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="row"><div><label for="topic">Book topic / short title</label><input id="topic" name="topic" maxlength="180" value="{{ request.form.get('topic', book.topic) }}" required></div>
+<div><label for="grade">Grade band</label><select id="grade" name="grade" required><option value="">Choose grade band</option>{% for value in ['3-4','5-6'] %}<option value="{{ value }}" {% if request.form.get('grade',book.grade)==value %}selected{% endif %}>Grades {{ value }}</option>{% endfor %}</select></div></div>
+<label for="pages">Three student pages for the preview</label><input id="pages" name="pages" maxlength="30" value="{{ request.form.get('pages', (result.selected if result else book.suggested)|join(',')) }}" placeholder="2,3,4" required>
+<p class="hint">Exactly three different pages, in the order entered. Check that each is a student page. Detected cover, key, and teacher pages are blocked. Unclassified pages need your review.</p>
+<button>Create preview &amp; listing draft</button></form>
+<details><summary>Page inventory and extracted headings</summary><div class="table"><table><thead><tr><th>Page</th><th>Detected role</th><th>Extracted heading</th><th>Text reading</th></tr></thead><tbody>{% for page in book.pages %}<tr><td>{{ page.number }}</td><td>{{ page.role }}</td><td>{{ page.heading }}</td><td>{{ 'Agent product information' if page.text_method == 'agent' else 'Offline OCR' if page.text_method == 'ocr' else 'PDF text' }}</td></tr>{% endfor %}</tbody></table></div></details></section>
+{% if result %}
+<section><h2>2. Your three-page preview</h2><p>Student pages {{ result.selected|join(', ') }}, with PREVIEW watermarks. The full book is unchanged.</p>
+<a class="button" href="{{ url_for('offline_listing.download', job=job, kind='preview') }}">Download preview PDF</a></section>
+<section><h2>3. Review the title &amp; description</h2>
+{% for note in result.notes %}<p class="hint">{{ note }}</p>{% endfor %}
+<form method="post" action="{{ url_for('offline_listing.save', job=job) }}"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label for="title">Title</label><input id="title" name="title" maxlength="300" value="{{ result.title }}" required>
+<label for="listing">Product listing (all sections)</label><textarea id="listing" name="listing" rows="28" maxlength="30000" required>{{ result.listing }}</textarea>
+<button>Save my edits</button><p class="hint">Save edits before downloading. Creating a new draft replaces your saved wording.</p></form>
+<a class="button" href="{{ url_for('offline_listing.download', job=job, kind='title') }}">Download title</a>
+<a class="button" href="{{ url_for('offline_listing.download', job=job, kind='listing') }}">Download description</a></section>
+{% endif %}{% endif %}
+<footer>Uploads and results are stored in this tool's local folder. Nothing is published or sent to a provider. Text-only extraction cannot verify illustrations or semantic claims; final listing review is yours.</footer>
+</main></body></html>
